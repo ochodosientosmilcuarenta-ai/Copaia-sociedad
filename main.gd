@@ -12,6 +12,9 @@ var target_zoom := Vector2.ONE
 var touch_points: Dictionary = {}
 var pinch_distance := 0.0
 var mouse_pan_active := false
+var stream_paths: Array[PackedVector2Array] = []
+var stream_layers: Array[Array] = []
+var stream_time := 0.0
 var rng := RandomNumberGenerator.new()
 var tobacco_fields: Array[Rect2] = [
     Rect2(380.0, 300.0, 270.0, 180.0),
@@ -75,6 +78,7 @@ class Aldeano extends Node2D:
 func _ready() -> void:
     rng.seed = 1426
     _create_observer_camera()
+    _create_streams()
     _build_activity_points()
     _spawn_villagers(18)
     queue_redraw()
@@ -82,6 +86,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
     _move_observer(delta)
     _zoom_observer(delta)
+    _animate_streams(delta)
     observer_camera.zoom = observer_camera.zoom.lerp(target_zoom, 1.0 - exp(-10.0 * delta))
 
 func _create_observer_camera() -> void:
@@ -198,20 +203,60 @@ func _draw_valley_floor() -> void:
     draw_polyline(valley, Color("#d0d892"), 5.0, true)
 
 func _draw_streams() -> void:
-    var riace := PackedVector2Array([
-        Vector2(80.0, 0.0), Vector2(155.0, 250.0), Vector2(120.0, 510.0),
-        Vector2(205.0, 790.0), Vector2(125.0, 1090.0), Vector2(220.0, WORLD_SIZE.y)
-    ])
-    var gorgone := PackedVector2Array([
-        Vector2(2260.0, 0.0), Vector2(2160.0, 260.0), Vector2(2240.0, 560.0),
-        Vector2(2140.0, 850.0), Vector2(2220.0, 1120.0), Vector2(2130.0, WORLD_SIZE.y)
-    ])
-    draw_polyline(riace, Color("#6bb6c2"), 34.0, true)
-    draw_polyline(gorgone, Color("#6bb6c2"), 34.0, true)
-    draw_polyline(riace, Color("#b1e0d7"), 3.0, true)
-    draw_polyline(gorgone, Color("#b1e0d7"), 3.0, true)
     draw_string(ThemeDB.fallback_font, Vector2(55.0, 155.0), "Riace", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("#1e5964"))
     draw_string(ThemeDB.fallback_font, Vector2(2190.0, 155.0), "Gorgone", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("#1e5964"))
+
+func _create_streams() -> void:
+    stream_paths = [
+        PackedVector2Array([
+            Vector2(80.0, -40.0), Vector2(118.0, 120.0), Vector2(168.0, 250.0),
+            Vector2(112.0, 390.0), Vector2(134.0, 540.0), Vector2(205.0, 700.0),
+            Vector2(172.0, 870.0), Vector2(126.0, 1050.0), Vector2(164.0, 1220.0),
+            Vector2(220.0, WORLD_SIZE.y + 40.0)
+        ]),
+        PackedVector2Array([
+            Vector2(2260.0, -40.0), Vector2(2208.0, 130.0), Vector2(2160.0, 270.0),
+            Vector2(2228.0, 430.0), Vector2(2182.0, 590.0), Vector2(2134.0, 760.0),
+            Vector2(2188.0, 930.0), Vector2(2222.0, 1100.0), Vector2(2170.0, 1260.0),
+            Vector2(2130.0, WORLD_SIZE.y + 40.0)
+        ])
+    ]
+    for stream_index in range(stream_paths.size()):
+        var layers: Array[Line2D] = []
+        layers.append(_create_stream_layer("Cauce", stream_paths[stream_index], 46.0, Color("#4f91a6")))
+        layers.append(_create_stream_layer("Agua", stream_paths[stream_index], 31.0, Color("#76c1c9")))
+        layers.append(_create_stream_layer("Reflejo", stream_paths[stream_index], 4.0, Color("#c0e9dc")))
+        stream_layers.append(layers)
+
+func _create_stream_layer(layer_name: String, points: PackedVector2Array, width: float, color: Color) -> Line2D:
+    var stream_line := Line2D.new()
+    stream_line.name = layer_name
+    stream_line.points = points
+    stream_line.width = width
+    stream_line.default_color = color
+    stream_line.joint_mode = Line2D.LINE_JOINT_ROUND
+    stream_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+    stream_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+    stream_line.antialiased = true
+    stream_line.z_index = 1
+    add_child(stream_line)
+    return stream_line
+
+func _animate_streams(delta: float) -> void:
+    stream_time += delta
+    for stream_index in range(stream_layers.size()):
+        var animated_points := PackedVector2Array()
+        for point_index in range(stream_paths[stream_index].size()):
+            var base_point := stream_paths[stream_index][point_index]
+            var wave := sin(stream_time * 1.8 + point_index * 0.9 + stream_index) * 5.0
+            animated_points.append(base_point + Vector2(wave, 0.0))
+        var layers: Array = stream_layers[stream_index]
+        for layer_index in range(layers.size()):
+            var stream_line: Line2D = layers[layer_index]
+            stream_line.points = animated_points
+            if layer_index == 1:
+                var tone_shift := sin(stream_time * 1.4 + stream_index) * 0.035
+                stream_line.modulate = Color(1.0 + tone_shift, 1.0 + tone_shift, 1.0 + tone_shift, 1.0)
 
 func _draw_fields() -> void:
     for field in tobacco_fields:
