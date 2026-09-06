@@ -9,6 +9,8 @@ const MAX_ZOOM := 2.2
 
 var observer_camera: Camera2D
 var target_zoom := Vector2.ONE
+var touch_points: Dictionary = {}
+var pinch_distance := 0.0
 var rng := RandomNumberGenerator.new()
 var tobacco_fields: Array[Rect2] = [
     Rect2(380.0, 300.0, 270.0, 180.0),
@@ -114,9 +116,34 @@ func _zoom_observer(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
     if event is InputEventMouseButton and event.pressed:
         if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-            _set_zoom(observer_camera.zoom.x + 0.12)
+            _set_zoom(target_zoom.x + 0.12)
         elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-            _set_zoom(observer_camera.zoom.x - 0.12)
+            _set_zoom(target_zoom.x - 0.12)
+    elif event is InputEventScreenTouch:
+        if event.pressed:
+            touch_points[event.index] = event.position
+            if touch_points.size() == 2:
+                pinch_distance = _get_pinch_distance()
+        else:
+            touch_points.erase(event.index)
+            pinch_distance = 0.0
+    elif event is InputEventScreenDrag:
+        if not touch_points.has(event.index):
+            return
+        touch_points[event.index] = event.position
+        if touch_points.size() != 2:
+            return
+        var next_pinch_distance := _get_pinch_distance()
+        if is_zero_approx(pinch_distance):
+            pinch_distance = next_pinch_distance
+            return
+        var zoom_ratio := next_pinch_distance / pinch_distance
+        _set_zoom(target_zoom.x * zoom_ratio)
+        pinch_distance = next_pinch_distance
+
+func _get_pinch_distance() -> float:
+    var points := touch_points.values()
+    return points[0].distance_to(points[1])
 
 func _set_zoom(value: float) -> void:
     var next_zoom := clampf(value, MIN_ZOOM, MAX_ZOOM)
