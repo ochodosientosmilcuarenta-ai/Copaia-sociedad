@@ -11,6 +11,7 @@ var observer_camera: Camera2D
 var target_zoom := Vector2.ONE
 var touch_points: Dictionary = {}
 var pinch_distance := 0.0
+var mouse_pan_active := false
 var rng := RandomNumberGenerator.new()
 var tobacco_fields: Array[Rect2] = [
     Rect2(380.0, 300.0, 270.0, 180.0),
@@ -114,11 +115,15 @@ func _zoom_observer(delta: float) -> void:
     target_zoom = Vector2(next_zoom, next_zoom)
 
 func _unhandled_input(event: InputEvent) -> void:
-    if event is InputEventMouseButton and event.pressed:
-        if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+    if event is InputEventMouseButton:
+        if event.button_index == MOUSE_BUTTON_LEFT:
+            mouse_pan_active = event.pressed
+        elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_UP:
             _set_zoom(target_zoom.x + 0.12)
-        elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+        elif event.pressed and event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
             _set_zoom(target_zoom.x - 0.12)
+    elif event is InputEventMouseMotion and mouse_pan_active:
+        _pan_observer(event.relative)
     elif event is InputEventScreenTouch:
         if event.pressed:
             touch_points[event.index] = event.position
@@ -131,6 +136,9 @@ func _unhandled_input(event: InputEvent) -> void:
         if not touch_points.has(event.index):
             return
         touch_points[event.index] = event.position
+        if touch_points.size() == 1:
+            _pan_observer(event.relative)
+            return
         if touch_points.size() != 2:
             return
         var next_pinch_distance := _get_pinch_distance()
@@ -140,6 +148,13 @@ func _unhandled_input(event: InputEvent) -> void:
         var zoom_ratio := next_pinch_distance / pinch_distance
         _set_zoom(target_zoom.x * zoom_ratio)
         pinch_distance = next_pinch_distance
+
+func _pan_observer(screen_delta: Vector2) -> void:
+    if screen_delta.is_zero_approx():
+        return
+    observer_camera.position -= screen_delta / observer_camera.zoom.x
+    observer_camera.position.x = clampf(observer_camera.position.x, 0.0, WORLD_SIZE.x)
+    observer_camera.position.y = clampf(observer_camera.position.y, 0.0, WORLD_SIZE.y)
 
 func _get_pinch_distance() -> float:
     var points := touch_points.values()
